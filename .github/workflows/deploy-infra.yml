@@ -53,7 +53,12 @@ jobs:
           echo "ARM_USE_OIDC=true" >> $GITHUB_ENV
 
       - name: Terraform Init
-        run: terraform init
+        run: |
+          terraform init \
+            -backend-config="resource_group_name=apim-kura" \
+            -backend-config="storage_account_name=apimkura" \
+            -backend-config="container_name=devops" \
+            -backend-config="key=${{ inputs.environment }}.tfstate"
 
       - name: Terraform Validate
         run: terraform validate
