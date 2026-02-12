@@ -45,7 +45,6 @@ jobs:
     uses: ./.github/workflows/test-go-app.yml
     with:
       environment: ${{ github.ref_name }}
-      terraform_version: "1.14.4"
     secrets: inherit
 
   release:

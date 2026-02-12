@@ -13,6 +13,8 @@ Azure API Management subscription keys are critical credentials that grant acces
   - [backup](#backup)
   - [restore](#restore)
   - [list](#list)
+  - [compare](#compare)
+  - [delete](#delete)
   - [clean](#clean)
 - [Backup Storage Layout](#backup-storage-layout)
 - [Typical Workflow](#typical-workflow)
@@ -24,6 +26,20 @@ Azure API Management subscription keys are critical credentials that grant acces
 - Sufficient permissions on the target APIM instance to read and write subscriptions
 
 ## Installation
+
+### Pre-built binaries
+
+Download the latest release from the [GitHub Releases](https://github.com/f-marschall/apim-kura/releases) page. Binaries are available for Linux, macOS, and Windows across multiple architectures.
+
+For example, on Linux (amd64):
+
+```bash
+curl -Lo kura https://github.com/f-marschall/apim-kura/releases/latest/download/kura-linux-amd64
+chmod +x kura
+sudo mv kura /usr/local/bin/
+```
+
+### Build from source
 
 ```bash
 git clone https://github.com/f-marschall/apim-kura.git
@@ -98,6 +114,29 @@ When `--product-id` is provided, the output is filtered to subscriptions scoped 
 | `--resource-group` | `-g` | Yes | Azure resource group containing the APIM instance |
 | `--apim-name` | `-a` | Yes | Name of the APIM instance |
 | `--product-id` | `-p` | No | Filter output to a single product |
+| `--subscription` | `-s` | No | Azure subscription ID (defaults to current CLI context) |
+
+### compare
+
+```
+kura compare <file1> <file2>
+```
+
+The compare command reads two backup JSON files and displays the differences between them. Use this to audit changes, verify backup consistency, or compare subscription keys across different snapshots.
+
+### delete
+
+```
+kura delete --resource-group <rg> --apim-name <apim> --subscription-id <id> [--subscription <sub-id>]
+```
+
+The delete command removes a subscription from an APIM instance. Specify the subscription ID (GUID) to delete.
+
+| Flag | Short | Required | Description |
+|------|-------|----------|----------|
+| `--resource-group` | `-g` | Yes | Azure resource group containing the APIM instance |
+| `--apim-name` | `-a` | Yes | Name of the APIM instance |
+| `--subscription-id` | `-i` | Yes | The subscription ID (GUID) to delete |
 | `--subscription` | `-s` | No | Azure subscription ID (defaults to current CLI context) |
 
 ### clean

@@ -21,7 +21,7 @@ jobs:
 
     defaults:
       run:
-        working-directory: ./test/tf
+        working-directory: ./.github/tf
 
     steps:
       - name: Checkout code

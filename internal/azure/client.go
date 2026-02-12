@@ -256,6 +256,16 @@ func (c *Client) CreateSubscription(ctx context.Context, sid, scope, displayName
 	return &info, nil
 }
 
+// DeleteSubscription deletes an APIM subscription by its ID.
+func (c *Client) DeleteSubscription(ctx context.Context, sid string) error {
+	subClient := c.clientFactory.NewSubscriptionClient()
+	_, err := subClient.Delete(ctx, c.resourceGroup, c.apimName, sid, "*", nil)
+	if err != nil {
+		return fmt.Errorf("failed to delete subscription %s: %w", sid, err)
+	}
+	return nil
+}
+
 func deref(s *string) string {
 	if s == nil {
 		return ""

@@ -6,9 +6,6 @@ on:
       environment:
         required: true
         type: string
-      terraform_version:
-        required: true
-        type: string
 
 permissions:
   id-token: write
@@ -30,12 +27,6 @@ jobs:
         with:
           go-version-file: go.mod
 
-      - name: Set up Terraform
-        uses: hashicorp/setup-terraform@v2
-        with:
-          terraform_version: ${{ inputs.terraform_version }}
-          terraform_wrapper: false
-
       - name: Azure Login (OIDC)
         uses: azure/login@v2
         with:
@@ -43,52 +34,16 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Configure Terraform for Azure
-        run: |
-          echo "ARM_CLIENT_ID=${{ secrets.AZURE_CLIENT_ID }}" >> $GITHUB_ENV
-          echo "ARM_TENANT_ID=${{ secrets.AZURE_TENANT_ID }}" >> $GITHUB_ENV
-          echo "ARM_SUBSCRIPTION_ID=${{ secrets.AZURE_SUBSCRIPTION_ID }}" >> $GITHUB_ENV
-          echo "ARM_USE_OIDC=true" >> $GITHUB_ENV
-
       - name: Build Go application
         run: go build -o kura .
 
-      - name: Terraform Init
-        working-directory: ./test/tf
-        run: |
-          terraform init \
-            -backend-config="resource_group_name=apim-kura" \
-            -backend-config="storage_account_name=apimkura" \
-            -backend-config="container_name=devops" \
-            -backend-config="key=${{ inputs.environment }}.tfstate"
-
       - name: Fetch subscription keys (before)
         run: |
-          set -euo pipefail
-          AZURE_SUB=${{ secrets.AZURE_SUBSCRIPTION_ID }}
-          API_VERSION="2022-08-01"
-          RG="${{ env.RESOURCE_GROUP }}"
-          APIM="${{ env.APIM_NAME }}"
-          BASE_URL="https://management.azure.com/subscriptions/${AZURE_SUB}/resourceGroups/${RG}/providers/Microsoft.ApiManagement/service/${APIM}"
-
-          SUBS=$(az rest --method get --url "${BASE_URL}/subscriptions?api-version=${API_VERSION}")
-
-          RESULT="[]"
-          for SID in $(echo "$SUBS" | jq -r '.value[] | select(.properties.displayName | startswith("Built-in") | not) | .name'); do
-            SECRETS=$(az rest --method post --url "${BASE_URL}/subscriptions/${SID}/listSecrets?api-version=${API_VERSION}")
-            DISPLAY_NAME=$(echo "$SUBS" | jq -r --arg sid "$SID" '.value[] | select(.name == $sid) | .properties.displayName')
-            PRIMARY=$(echo "$SECRETS" | jq -r '.primaryKey')
-            SECONDARY=$(echo "$SECRETS" | jq -r '.secondaryKey')
-
-            RESULT=$(echo "$RESULT" | jq \
-              --arg dn "$DISPLAY_NAME" \
-              --arg pk "$PRIMARY" \
-              --arg sk "$SECONDARY" \
-              '. + [{"displayName": $dn, "primaryKey": $pk, "secondaryKey": $sk}]')
-          done
-
-          echo "$RESULT" | jq 'sort_by(.displayName)' > before.json
-          echo "Saved $(echo "$RESULT" | jq length) subscription keys to before.json"
+          ./kura backup \
+            --resource-group "${{ env.RESOURCE_GROUP }}" \
+            --apim-name "${{ env.APIM_NAME }}" \
+            --subscription "${{ secrets.AZURE_SUBSCRIPTION_ID }}" \
+            --output before.json
 
       - name: Run kura backup
         run: |
@@ -98,14 +53,11 @@ jobs:
             --subscription "${{ secrets.AZURE_SUBSCRIPTION_ID }}"
 
       - name: Delete all subscription resources
-        working-directory: ./test/tf
         run: |
-          terraform destroy \
-            -target='azurerm_api_management_subscription.global_subscription' \
-            -target='azurerm_api_management_subscription.product_subscription' \
-            -target='azurerm_api_management_subscription.api_subscription' \
-            -var="environment=${{ inputs.environment }}" \
-            -auto-approve
+          ./kura delete \
+            --resource-group "${{ env.RESOURCE_GROUP }}" \
+            --apim-name "${{ env.APIM_NAME }}" \
+            --subscription "${{ secrets.AZURE_SUBSCRIPTION_ID }}"
 
       - name: Run kura restore
         run: |
@@ -117,46 +69,18 @@ jobs:
 
       - name: Fetch subscription keys (after)
         run: |
-          set -euo pipefail
-          AZURE_SUB=$(az account show --query id -o tsv)
-          API_VERSION="2022-08-01"
-          RG="${{ env.RESOURCE_GROUP }}"
-          APIM="${{ env.APIM_NAME }}"
-          BASE_URL="https://management.azure.com/subscriptions/${AZURE_SUB}/resourceGroups/${RG}/providers/Microsoft.ApiManagement/service/${APIM}"
-
-          SUBS=$(az rest --method get --url "${BASE_URL}/subscriptions?api-version=${API_VERSION}")
-
-          RESULT="[]"
-          for SID in $(echo "$SUBS" | jq -r '.value[] | select(.properties.displayName | startswith("Built-in") | not) | .name'); do
-            SECRETS=$(az rest --method post --url "${BASE_URL}/subscriptions/${SID}/listSecrets?api-version=${API_VERSION}")
-            DISPLAY_NAME=$(echo "$SUBS" | jq -r --arg sid "$SID" '.value[] | select(.name == $sid) | .properties.displayName')
-            PRIMARY=$(echo "$SECRETS" | jq -r '.primaryKey')
-            SECONDARY=$(echo "$SECRETS" | jq -r '.secondaryKey')
-
-            RESULT=$(echo "$RESULT" | jq \
-              --arg dn "$DISPLAY_NAME" \
-              --arg pk "$PRIMARY" \
-              --arg sk "$SECONDARY" \
-              '. + [{"displayName": $dn, "primaryKey": $pk, "secondaryKey": $sk}]')
-          done
-
-          echo "$RESULT" | jq 'sort_by(.displayName)' > after.json
-          echo "Saved $(echo "$RESULT" | jq length) subscription keys to after.json"
+          ./kura backup \
+            --resource-group "${{ env.RESOURCE_GROUP }}" \
+            --apim-name "${{ env.APIM_NAME }}" \
+            --subscription "${{ secrets.AZURE_SUBSCRIPTION_ID }}" \
+            --output after.json
 
       - name: Compare subscription keys
         run: |
-          echo "=== Before (subscription count): $(jq length before.json) ==="
-          echo "=== After  (subscription count): $(jq length after.json) ==="
-
-          if diff <(jq -S . before.json) <(jq -S . after.json); then
-            echo "✓ All subscription keys match! Backup and restore successful."
-          else
-            echo ""
-            echo "✗ Subscription keys do not match after restore!"
-            echo ""
-            echo "--- Before ---"
-            jq . before.json
-            echo "--- After ---"
-            jq . after.json
+          # test if before.json and after.json are not empty
+          if [ ! -s before.json ] || [ ! -s after.json ]; then
+            echo "One of the backup files is empty!"
             exit 1
           fi
+
+          ./kura compare before.json after.json

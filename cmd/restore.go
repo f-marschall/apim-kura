@@ -136,9 +136,21 @@ func runRestore(cmd *cobra.Command, args []string) error {
 		sid := sub.Name // The subscription entity ID (GUID).
 		displayName := sub.Properties.DisplayName
 
+		// The "master" subscription always exists and cannot be recreated.
+		// Skip it completely.
+		if sid == "master" {
+			fmt.Printf("  [WARNING] Skipping built-in 'master' subscription\n")
+			continue
+		}
+
 		// Determine the target scope.
 		// Extract the scope suffix from the backup and rebuild for the target environment.
 		scopeSuffix := extractScopeSuffix(sub.Properties.Scope)
+		// Instance-level scopes (empty suffix) are not valid for CreateOrUpdate.
+		// Map them to "/apis" which covers all APIs — the closest equivalent.
+		if scopeSuffix == "" {
+			scopeSuffix = "apis"
+		}
 		scope := buildScopeFromSuffix(azureSubID, restoreResourceGroup, restoreAPIMName, scopeSuffix)
 
 		opts := &azure.CreateSubscriptionOptions{
