@@ -48,23 +48,43 @@ func init() {
 	restoreCmd.MarkFlagRequired("input")
 }
 
-// extractProductID extracts the product ID from an APIM scope string.
-// Scope format: /subscriptions/.../providers/Microsoft.ApiManagement/service/<apim>/products/<productID>
-func extractProductID(scope string) string {
-	const marker = "/products/"
+// extractScopeSuffix extracts the scope suffix after the APIM service name.
+// For example, given a scope like:
+//
+//	/subscriptions/.../service/<apim>/products/<productID>
+//
+// it returns "products/<productID>".
+// For instance-level scopes (ending with /service/<apim> or /service/<apim>/)
+// it returns an empty string.
+func extractScopeSuffix(scope string) string {
+	const marker = "/service/"
 	idx := strings.LastIndex(scope, marker)
 	if idx == -1 {
 		return ""
 	}
-	return scope[idx+len(marker):]
+	// Skip past "/service/<apim-name>"
+	rest := scope[idx+len(marker):]
+	slashIdx := strings.Index(rest, "/")
+	if slashIdx == -1 {
+		return ""
+	}
+	suffix := rest[slashIdx+1:]
+	// Trim trailing slash
+	suffix = strings.TrimRight(suffix, "/")
+	return suffix
 }
 
-// buildScope constructs a full APIM scope resource ID for a product.
-func buildScope(azureSubscriptionID, resourceGroup, apimName, productID string) string {
-	return fmt.Sprintf(
-		"/subscriptions/%s/resourceGroups/%s/providers/Microsoft.ApiManagement/service/%s/products/%s",
-		azureSubscriptionID, resourceGroup, apimName, productID,
+// buildScopeFromSuffix constructs a full APIM scope resource ID from a suffix.
+// If suffix is empty, the scope is the APIM instance itself.
+func buildScopeFromSuffix(azureSubscriptionID, resourceGroup, apimName, suffix string) string {
+	base := fmt.Sprintf(
+		"/subscriptions/%s/resourceGroups/%s/providers/Microsoft.ApiManagement/service/%s",
+		azureSubscriptionID, resourceGroup, apimName,
 	)
+	if suffix == "" {
+		return base
+	}
+	return base + "/" + suffix
 }
 
 func runRestore(cmd *cobra.Command, args []string) error {
@@ -117,14 +137,9 @@ func runRestore(cmd *cobra.Command, args []string) error {
 		displayName := sub.Properties.DisplayName
 
 		// Determine the target scope.
-		// Extract the product ID from the backup scope and rebuild for the target environment.
-		productID := extractProductID(sub.Properties.Scope)
-		if productID == "" {
-			fmt.Printf("  [SKIP] %s (%s) — could not extract product ID from scope\n", displayName, sid)
-			failed++
-			continue
-		}
-		scope := buildScope(azureSubID, restoreResourceGroup, restoreAPIMName, productID)
+		// Extract the scope suffix from the backup and rebuild for the target environment.
+		scopeSuffix := extractScopeSuffix(sub.Properties.Scope)
+		scope := buildScopeFromSuffix(azureSubID, restoreResourceGroup, restoreAPIMName, scopeSuffix)
 
 		opts := &azure.CreateSubscriptionOptions{
 			PrimaryKey:   sub.Properties.PrimaryKey,
@@ -137,13 +152,18 @@ func runRestore(cmd *cobra.Command, args []string) error {
 		allowTracing := sub.Properties.AllowTracing
 		opts.AllowTracing = &allowTracing
 
+		scopeLabel := scopeSuffix
+		if scopeLabel == "" {
+			scopeLabel = "(instance)"
+		}
+
 		if restoreDryRun {
-			fmt.Printf("  [DRY-RUN] Would restore: %s (sid=%s, product=%s)\n", displayName, sid, productID)
+			fmt.Printf("  [DRY-RUN] Would restore: %s (sid=%s, scope=%s)\n", displayName, sid, scopeLabel)
 			restored++
 			continue
 		}
 
-		fmt.Printf("  Restoring: %s (sid=%s, product=%s)...\n", displayName, sid, productID)
+		fmt.Printf("  Restoring: %s (sid=%s, scope=%s)...\n", displayName, sid, scopeLabel)
 		_, err := client.CreateSubscription(ctx, sid, scope, displayName, opts)
 		if err != nil {
 			fmt.Printf("  [FAIL] %s: %v\n", displayName, err)
