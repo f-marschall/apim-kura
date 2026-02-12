@@ -18,6 +18,23 @@ permissions:
   contents: write
 
 jobs:
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      app: ${{ steps.changes.outputs.app }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dorny/paths-filter@v3
+        id: changes
+        with:
+          filters: |
+            app:
+              - '*.go'
+              - 'go.mod'
+              - 'go.sum'
+              - 'cmd/**'
+              - 'internal/**'
+
   deploy:
     uses: ./.github/workflows/deploy-infra.yml
     with:
@@ -25,15 +42,16 @@ jobs:
       terraform_version: "1.14.4"
     secrets: inherit
 
-  # test:
-  #   needs: deploy
-  #   uses: ./.github/workflows/test-go-app.yml
-  #   with:
-  #     environment: ${{ github.ref_name }}
-  #     terraform_version: "1.14.4"
-  #   secrets: inherit
+  test:
+    needs: deploy
+    uses: ./.github/workflows/test-go-app.yml
+    with:
+      environment: ${{ github.ref_name }}
+      terraform_version: "1.14.4"
+    secrets: inherit
 
   release:
-    # needs: test
+    needs: [test, detect-changes]
+    if: needs.detect-changes.outputs.app == 'true'
     uses: ./.github/workflows/release.yml
     secrets: inherit
