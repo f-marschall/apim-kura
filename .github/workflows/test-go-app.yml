@@ -57,18 +57,17 @@ jobs:
       - name: Fetch subscription keys (before)
         run: |
           set -euo pipefail
-          AZURE_SUB=$(az account show --query id -o tsv)
-          API_VERSION="2022-08-01"
-          BASE_URL="https://management.azure.com/subscriptions/${AZURE_SUB}/resourceGroups/${{ env.RESOURCE_GROUP }}/providers/Microsoft.ApiManagement/service/${{ env.APIM_NAME }}"
+          RG="${{ env.RESOURCE_GROUP }}"
+          APIM="${{ env.APIM_NAME }}"
 
-          SUBS=$(az rest --method get --url "${BASE_URL}/subscriptions?api-version=${API_VERSION}")
+          SUBS=$(az apim subscription list --resource-group "$RG" --service-name "$APIM" -o json)
 
           RESULT="[]"
-          for SID in $(echo "$SUBS" | jq -r '.value[] | select(.properties.displayName | startswith("Built-in") | not) | .name'); do
-            SECRETS=$(az rest --method post --url "${BASE_URL}/subscriptions/${SID}/listSecrets?api-version=${API_VERSION}")
-            DISPLAY_NAME=$(echo "$SUBS" | jq -r --arg sid "$SID" '.value[] | select(.name == $sid) | .properties.displayName')
-            PRIMARY=$(echo "$SECRETS" | jq -r '.primaryKey')
-            SECONDARY=$(echo "$SECRETS" | jq -r '.secondaryKey')
+          for SID in $(echo "$SUBS" | jq -r '.[] | select(.displayName | startswith("Built-in") | not) | .name'); do
+            KEYS=$(az apim subscription keys show --resource-group "$RG" --service-name "$APIM" --sid "$SID" -o json)
+            DISPLAY_NAME=$(echo "$SUBS" | jq -r --arg sid "$SID" '.[] | select(.name == $sid) | .displayName')
+            PRIMARY=$(echo "$KEYS" | jq -r '.primaryKey')
+            SECONDARY=$(echo "$KEYS" | jq -r '.secondaryKey')
 
             RESULT=$(echo "$RESULT" | jq \
               --arg dn "$DISPLAY_NAME" \
@@ -109,18 +108,17 @@ jobs:
       - name: Fetch subscription keys (after)
         run: |
           set -euo pipefail
-          AZURE_SUB=$(az account show --query id -o tsv)
-          API_VERSION="2022-08-01"
-          BASE_URL="https://management.azure.com/subscriptions/${AZURE_SUB}/resourceGroups/${{ env.RESOURCE_GROUP }}/providers/Microsoft.ApiManagement/service/${{ env.APIM_NAME }}"
+          RG="${{ env.RESOURCE_GROUP }}"
+          APIM="${{ env.APIM_NAME }}"
 
-          SUBS=$(az rest --method get --url "${BASE_URL}/subscriptions?api-version=${API_VERSION}")
+          SUBS=$(az apim subscription list --resource-group "$RG" --service-name "$APIM" -o json)
 
           RESULT="[]"
-          for SID in $(echo "$SUBS" | jq -r '.value[] | select(.properties.displayName | startswith("Built-in") | not) | .name'); do
-            SECRETS=$(az rest --method post --url "${BASE_URL}/subscriptions/${SID}/listSecrets?api-version=${API_VERSION}")
-            DISPLAY_NAME=$(echo "$SUBS" | jq -r --arg sid "$SID" '.value[] | select(.name == $sid) | .properties.displayName')
-            PRIMARY=$(echo "$SECRETS" | jq -r '.primaryKey')
-            SECONDARY=$(echo "$SECRETS" | jq -r '.secondaryKey')
+          for SID in $(echo "$SUBS" | jq -r '.[] | select(.displayName | startswith("Built-in") | not) | .name'); do
+            KEYS=$(az apim subscription keys show --resource-group "$RG" --service-name "$APIM" --sid "$SID" -o json)
+            DISPLAY_NAME=$(echo "$SUBS" | jq -r --arg sid "$SID" '.[] | select(.name == $sid) | .displayName')
+            PRIMARY=$(echo "$KEYS" | jq -r '.primaryKey')
+            SECONDARY=$(echo "$KEYS" | jq -r '.secondaryKey')
 
             RESULT=$(echo "$RESULT" | jq \
               --arg dn "$DISPLAY_NAME" \
