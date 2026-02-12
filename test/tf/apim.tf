@@ -166,6 +166,7 @@ resource "azurerm_api_management_subscription" "api_subscription" {
   ]
 }
 
+# (Because of the pricing tier consuption, we cannot create users and link them to subscriptions, so we create "orphan" subscriptions without users. In a real scenario, you would create users and link them to these subscriptions.)
 # Sample User for Subscriptions
 # resource "azurerm_api_management_user" "sample_user" {
 #   api_management_name = azurerm_api_management.main.name

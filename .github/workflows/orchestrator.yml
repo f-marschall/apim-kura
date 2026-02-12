@@ -1,0 +1,39 @@
+name: Deploy, Test, and Release
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'test/tf/**'
+      - '.github/workflows/**'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  id-token: write
+  contents: write
+
+jobs:
+  deploy:
+    uses: ./.github/workflows/deploy-infra.yml
+    with:
+      environment: ${{ github.ref_name }}
+      terraform_version: "1.14.4"
+    secrets: inherit
+
+  # test:
+  #   needs: deploy
+  #   uses: ./.github/workflows/test-go-app.yml
+  #   with:
+  #     environment: ${{ github.ref_name }}
+  #     terraform_version: "1.14.4"
+  #   secrets: inherit
+
+  release:
+    # needs: test
+    uses: ./.github/workflows/release.yml
+    secrets: inherit

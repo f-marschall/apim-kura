@@ -1,0 +1,67 @@
+name: Release
+
+on:
+  workflow_call:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Determine version
+        id: version
+        run: |
+          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+          # Increment patch version
+          MAJOR=$(echo "$LATEST_TAG" | sed 's/v//' | cut -d. -f1)
+          MINOR=$(echo "$LATEST_TAG" | sed 's/v//' | cut -d. -f2)
+          PATCH=$(echo "$LATEST_TAG" | sed 's/v//' | cut -d. -f3)
+          NEW_VERSION="v${MAJOR}.${MINOR}.$((PATCH + 1))"
+          echo "version=${NEW_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "Releasing version: ${NEW_VERSION}"
+
+      - name: Build binaries
+        run: |
+          VERSION=${{ steps.version.outputs.version }}
+          MODULE="github.com/f-marschall/apim-kura/cmd"
+          LDFLAGS="-X '${MODULE}.Version=${VERSION}'"
+
+          GOOS=linux   GOARCH=amd64 go build -ldflags="${LDFLAGS}" -o kura-linux-amd64 .
+          GOOS=linux   GOARCH=arm64 go build -ldflags="${LDFLAGS}" -o kura-linux-arm64 .
+          GOOS=darwin  GOARCH=amd64 go build -ldflags="${LDFLAGS}" -o kura-darwin-amd64 .
+          GOOS=darwin  GOARCH=arm64 go build -ldflags="${LDFLAGS}" -o kura-darwin-arm64 .
+          GOOS=windows GOARCH=amd64 go build -ldflags="${LDFLAGS}" -o kura-windows-amd64.exe .
+
+      - name: Create Git tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag ${{ steps.version.outputs.version }}
+          git push origin ${{ steps.version.outputs.version }}
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.version }}
+          name: Release ${{ steps.version.outputs.version }}
+          generate_release_notes: true
+          files: |
+            kura-linux-amd64
+            kura-linux-arm64
+            kura-darwin-amd64
+            kura-darwin-arm64
+            kura-windows-amd64.exe
