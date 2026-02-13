@@ -17,7 +17,7 @@ var restoreCmd = &cobra.Command{
 	Short: "Restore subscription keys to Azure API Management",
 	Long: `Restore reads a backup file and restores subscription keys
 to an Azure API Management instance.
-
+WARNING: The master subscription key is not restored as it is a built-in system subscription.
 Example:
   kura restore --resource-group mygroup --apim-name myapim --input backup/mygroup/myapim/subscriptions.json
   kura restore -g mygroup -a myapim -i backup/mygroup/myapim/myproduct/subscriptions.json --dry-run`,
@@ -95,6 +95,8 @@ func runRestore(cmd *cobra.Command, args []string) error {
 	if restoreSubscription != "" {
 		fmt.Printf("Subscription ID: %s\n", restoreSubscription)
 	}
+
+	fmt.Println("\n⚠️  WARNING: The master subscription key is not restored (built-in system subscription)")
 
 	if restoreDryRun {
 		fmt.Println("\nRunning in DRY-RUN mode. No changes will be applied.")

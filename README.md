@@ -89,6 +89,8 @@ The restore command reads a previously created backup file and recreates each su
 
 The philosophy behind restore is idempotent, environment-agnostic replay. A backup taken from one APIM instance can be restored to a different instance (even in a different resource group or Azure subscription). Kura extracts the product ID from the scope stored in the backup and rebuilds the full resource path against the target environment. This makes it suitable for disaster recovery, environment promotion, and infrastructure-as-code workflows where APIM is torn down and recreated.
 
+**⚠️ Warning:** The `master` subscription is a built-in system subscription that cannot be recreated. It is automatically skipped during restore operations and its keys are not restored.
+
 The `--dry-run` flag previews every subscription that would be created or updated without making any changes. This is intended for validation before committing to a restore operation.
 
 | Flag | Short | Required | Description |
