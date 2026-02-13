@@ -68,28 +68,3 @@ jobs:
 
       - name: Terraform Apply
         run: terraform apply -var="environment=${{ inputs.environment }}" -auto-approve tfplan
-
-      - name: Get API Management outputs
-        run: |
-          terraform output -json > outputs.json
-          echo "Terraform outputs saved successfully"
-
-      - name: Test API endpoint
-        run: |
-          GATEWAY_URL=$(terraform output -raw gateway_url | xargs)
-          echo "Testing API endpoint at: ${GATEWAY_URL}/sample/get"
-          for i in {1..5}; do
-            echo "Attempt $i..."
-            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -H "Ocp-Apim-Subscription-Key: placeholder" "${GATEWAY_URL}/sample/get")
-            echo "HTTP Status: $HTTP_CODE"
-            if [ "$HTTP_CODE" = "401" ] || [ "$HTTP_CODE" = "403" ]; then
-              echo "✓ API is responding (auth required is expected)"
-              break
-            elif [ "$HTTP_CODE" = "200" ]; then
-              echo "✓ API is responding"
-              break
-            else
-              echo "✗ API not responding yet, waiting 30 seconds..."
-              sleep 30
-            fi
-          done

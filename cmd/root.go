@@ -7,11 +7,9 @@ import (
 )
 
 var (
-	// Version is set during build via ldflags
 	Version = "dev"
 )
 
-// rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
 	Use:   "kura",
 	Short: "Kura - Azure API Management subscription key backup and restore tool",
@@ -23,8 +21,6 @@ and restore them from a backup file.`,
 	Version: Version,
 }
 
-// Execute adds all child commands to the root command and sets flags appropriately.
-// This is called by main.main(). It only needs to happen once to the rootCmd.
 func Execute() {
 	err := rootCmd.Execute()
 	if err != nil {
@@ -33,7 +29,6 @@ func Execute() {
 }
 
 func init() {
-	// Here you will define your flags and configuration settings.
 	// Cobra supports persistent flags, which, if defined here,
 	// will be global for your application.
 
