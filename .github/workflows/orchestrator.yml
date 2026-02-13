@@ -41,7 +41,8 @@ jobs:
     secrets: inherit
 
   test:
-    needs: deploy
+    needs: [deploy, detect-changes]
+    if: needs.detect-changes.outputs.app == 'true'
     uses: ./.github/workflows/test-go-app.yml
     with:
       environment: ${{ github.ref_name }}
