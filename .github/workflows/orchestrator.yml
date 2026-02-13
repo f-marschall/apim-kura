@@ -47,9 +47,3 @@ jobs:
     with:
       environment: ${{ github.ref_name }}
     secrets: inherit
-
-  release:
-    needs: [test, detect-changes]
-    if: needs.detect-changes.outputs.app == 'true' && github.ref == 'refs/heads/main'
-    uses: ./.github/workflows/release.yml
-    secrets: inherit
