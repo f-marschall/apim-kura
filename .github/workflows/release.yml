@@ -4,8 +4,6 @@ on:
   push:
     tags:
       - 'v*'
-    branches:
-      - main
 
 permissions:
   contents: write
@@ -13,7 +11,6 @@ permissions:
 jobs:
   release:
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
 
     steps:
       - name: Checkout code
@@ -29,19 +26,8 @@ jobs:
       - name: Determine version
         id: version
         run: |
-          if [[ "${{ github.ref_type }}" == "tag" ]]; then
-            # Use the tag that triggered the workflow
-            NEW_VERSION="${{ github.ref_name }}"
-          else
-            # Auto-increment patch version for manual releases
-            LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
-            MAJOR=$(echo "$LATEST_TAG" | sed 's/v//' | cut -d. -f1)
-            MINOR=$(echo "$LATEST_TAG" | sed 's/v//' | cut -d. -f2)
-            PATCH=$(echo "$LATEST_TAG" | sed 's/v//' | cut -d. -f3)
-            NEW_VERSION="v${MAJOR}.${MINOR}.$((PATCH + 1))"
-          fi
-          echo "version=${NEW_VERSION}" >> "$GITHUB_OUTPUT"
-          echo "Releasing version: ${NEW_VERSION}"
+          echo "version=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+          echo "Releasing version: ${{ github.ref_name }}"
 
       - name: Build binaries
         run: |
@@ -55,21 +41,27 @@ jobs:
           GOOS=darwin  GOARCH=arm64 go build -ldflags="${LDFLAGS}" -o kura-darwin-arm64 .
           GOOS=windows GOARCH=amd64 go build -ldflags="${LDFLAGS}" -o kura-windows-amd64.exe .
 
-      - name: Create Git tag
-        if: github.ref_type == 'branch'
+      - name: Extract changelog
+        id: changelog
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git tag ${{ steps.version.outputs.version }}
-          git push origin ${{ steps.version.outputs.version }}
+          VERSION_NUM="${{ steps.version.outputs.version }}"
+          VERSION_NUM="${VERSION_NUM#v}"
+          NOTES=$(awk "/^## \\[${VERSION_NUM}\\]/{found=1; next} /^## \\[/{if(found) exit} found{print}" CHANGELOG.md)
+          if [ -z "$NOTES" ]; then
+            NOTES="No changelog entry for ${{ steps.version.outputs.version }}."
+          fi
+          {
+            echo "notes<<EOF"
+            echo "$NOTES"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
-        if: github.ref_type == 'tag'
         with:
           tag_name: ${{ steps.version.outputs.version }}
           name: Release ${{ steps.version.outputs.version }}
-          generate_release_notes: true
+          body: ${{ steps.changelog.outputs.notes }}
           files: |
             kura-linux-amd64
             kura-linux-arm64
