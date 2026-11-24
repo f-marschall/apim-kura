@@ -104,10 +104,10 @@ The `--dry-run` flag previews every subscription that would be created or update
 ### list
 
 ```
-kura list --resource-group <rg> --apim-name <apim> [--product-id <product>] [--subscription <sub-id>]
+kura list --resource-group <rg> --apim-name <apim> [--product-id <product>] [--subscription <sub-id>] [--show-keys]
 ```
 
-The list command is a diagnostic and inspection tool. It connects to an APIM instance and prints every subscription key to the terminal in a human-readable format. Unlike backup, it does not write anything to disk. Its purpose is to give operators a quick view of current subscription state -- useful for auditing, verifying a restore, or comparing keys across environments.
+The list command is a diagnostic and inspection tool. It connects to an APIM instance and prints subscription information to the terminal in a human-readable format. Keys are retrieved but hidden by default; use `--show-keys` to print the primary and secondary keys in plaintext. It also looks up each subscription's owner in APIM and displays the owner's name when available. Owner lookup failures are reported as warnings and do not prevent the subscription list from being displayed. Unlike backup, it does not write anything to disk. Its purpose is to give operators a quick view of current subscription state -- useful for auditing, verifying a restore, or comparing keys across environments.
 
 When `--product-id` is provided, the output is filtered to subscriptions scoped to that product.
 
@@ -117,6 +117,7 @@ When `--product-id` is provided, the output is filtered to subscriptions scoped 
 | `--apim-name` | `-a` | Yes | Name of the APIM instance |
 | `--product-id` | `-p` | No | Filter output to a single product |
 | `--subscription` | `-s` | No | Azure subscription ID (defaults to current CLI context) |
+| `--show-keys` | | No | Print primary and secondary keys in plaintext |
 
 ### compare
 

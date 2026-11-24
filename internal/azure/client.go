@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os/exec"
+	"strings"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/apimanagement/armapimanagement"
@@ -44,6 +45,17 @@ type SubscriptionInfoProperties struct {
 	AllowTracing     bool   `json:"allowTracing"`
 }
 
+// UserInfo contains the identifying details of an APIM user.
+type UserInfo struct {
+	FirstName string
+	LastName  string
+}
+
+// DisplayName combines the APIM user's first and last names.
+func (u UserInfo) DisplayName() string {
+	return strings.TrimSpace(u.FirstName + " " + u.LastName)
+}
+
 // NewClient creates a new Azure API Management client using Azure CLI credentials
 func NewClient(ctx context.Context, subscriptionID, resourceGroup, apimName string) (*Client, error) {
 	// If no subscription ID provided, resolve it from Azure CLI
@@ -74,6 +86,38 @@ func NewClient(ctx context.Context, subscriptionID, resourceGroup, apimName stri
 		credential:     cred,
 		clientFactory:  clientFactory,
 	}, nil
+}
+
+// GetOwner retrieves the APIM user associated with a subscription owner ID.
+func (c *Client) GetOwner(ctx context.Context, ownerID string) (UserInfo, error) {
+	userID, err := userIDFromOwnerID(ownerID)
+	if err != nil {
+		return UserInfo{}, err
+	}
+
+	resp, err := c.clientFactory.NewUserClient().Get(ctx, c.resourceGroup, c.apimName, userID, nil)
+	if err != nil {
+		return UserInfo{}, fmt.Errorf("failed to get APIM user %q: %w", userID, err)
+	}
+	if resp.UserContract.Properties == nil {
+		return UserInfo{}, fmt.Errorf("APIM user %q has no properties", userID)
+	}
+
+	return UserInfo{
+		FirstName: deref(resp.UserContract.Properties.FirstName),
+		LastName:  deref(resp.UserContract.Properties.LastName),
+	}, nil
+}
+
+func userIDFromOwnerID(ownerID string) (string, error) {
+	parts := strings.Split(strings.Trim(ownerID, "/"), "/")
+	if len(parts) == 1 && parts[0] != "" {
+		return parts[0], nil
+	}
+	if len(parts) >= 2 && strings.EqualFold(parts[len(parts)-2], "users") && parts[len(parts)-1] != "" {
+		return parts[len(parts)-1], nil
+	}
+	return "", fmt.Errorf("owner ID %q is not a valid APIM user ID", ownerID)
 }
 
 // SubscriptionID returns the Azure subscription ID used by this client.
